@@ -89,7 +89,7 @@ if (sql) {
           console.log(`Adding missing column ${col.name} to users table`);
           try {
             // Using a direct string query for DDL
-            await sql(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type}`);
+            await sql.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type}`);
           } catch (err) {
             console.error(`Failed to add column ${col.name}:`, err);
           }
@@ -116,7 +116,7 @@ if (sql) {
       const jobCols = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'jobs' AND table_schema = 'public'`;
       const jobColNames = jobCols.map((c: any) => c.column_name);
       if (!jobColNames.includes('completed_at')) {
-        await sql(`ALTER TABLE jobs ADD COLUMN completed_at TIMESTAMP WITH TIME ZONE`);
+        await sql.query(`ALTER TABLE jobs ADD COLUMN completed_at TIMESTAMP WITH TIME ZONE`);
       }
 
       // Messages table
@@ -163,7 +163,7 @@ if (sql) {
       const ticketCols = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'tickets' AND table_schema = 'public'`;
       const ticketColNames = ticketCols.map((c: any) => c.column_name);
       if (!ticketColNames.includes('author_uid')) {
-        await sql(`ALTER TABLE tickets ADD COLUMN author_uid TEXT`);
+        await sql.query(`ALTER TABLE tickets ADD COLUMN author_uid TEXT`);
       }
 
       // Quotations table
@@ -184,7 +184,7 @@ if (sql) {
       const quoteCols = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'quotations' AND table_schema = 'public'`;
       const quoteColNames = quoteCols.map((c: any) => c.column_name);
       if (!quoteColNames.includes('client_uid')) {
-        await sql(`ALTER TABLE quotations ADD COLUMN client_uid TEXT`);
+        await sql.query(`ALTER TABLE quotations ADD COLUMN client_uid TEXT`);
       }
 
       // Invoices table
@@ -204,7 +204,7 @@ if (sql) {
       const invoiceCols = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'invoices' AND table_schema = 'public'`;
       const invoiceColNames = invoiceCols.map((c: any) => c.column_name);
       if (!invoiceColNames.includes('client_email')) {
-        await sql(`ALTER TABLE invoices ADD COLUMN client_email TEXT`);
+        await sql.query(`ALTER TABLE invoices ADD COLUMN client_email TEXT`);
       }
 
       // Job Postings table
@@ -268,7 +268,7 @@ if (sql) {
             const col = cols.find((c: any) => c.column_name === colName);
             if (col && col.data_type === 'uuid') {
               console.log(`Changing ${t.table}.${colName} from UUID to TEXT`);
-              await sql(`ALTER TABLE ${t.table} ALTER COLUMN ${colName} TYPE TEXT`);
+              await sql.query(`ALTER TABLE ${t.table} ALTER COLUMN ${colName} TYPE TEXT`);
             }
           }
         } catch (err) {
@@ -432,10 +432,10 @@ app.get("/api/db/:collection", async (req, res) => {
       if (mappedWhereField && whereOp && whereValue) {
         const op = whereOp === '==' ? '=' : whereOp;
         const query = `SELECT * FROM ${collection} WHERE ${mappedWhereField} ${op} $1 ${mappedOrderByField ? `ORDER BY ${mappedOrderByField} ${orderDirection === 'desc' ? 'DESC' : 'ASC'}` : 'ORDER BY created_at DESC'} ${limitCount ? `LIMIT ${limitCount}` : ''}`;
-        data = await sql(query, [whereValue]);
+        data = await sql.query(query, [whereValue]);
       } else {
         const query = `SELECT * FROM ${collection} ${mappedOrderByField ? `ORDER BY ${mappedOrderByField} ${orderDirection === 'desc' ? 'DESC' : 'ASC'}` : 'ORDER BY created_at DESC'} ${limitCount ? `LIMIT ${limitCount}` : ''}`;
-        data = await sql(query);
+        data = await sql.query(query);
       }
       res.json(data);
     } else {
@@ -443,10 +443,10 @@ app.get("/api/db/:collection", async (req, res) => {
       let docs;
       if (whereField && whereOp && whereValue) {
         const query = `SELECT id, data, created_at FROM documents WHERE collection = $1 AND data->>$2 = $3 ORDER BY created_at DESC ${limitCount ? `LIMIT ${limitCount}` : ''}`;
-        docs = await sql(query, [collection, whereField, whereValue]);
+        docs = await sql.query(query, [collection, whereField, whereValue]);
       } else {
         const query = `SELECT id, data, created_at FROM documents WHERE collection = $1 ORDER BY created_at DESC ${limitCount ? `LIMIT ${limitCount}` : ''}`;
-        docs = await sql(query, [collection]);
+        docs = await sql.query(query, [collection]);
       }
       const docsData = docs.map((d: any) => ({ ...d.data, id: d.id, createdAt: d.created_at }));
       res.json(docsData);
@@ -464,7 +464,7 @@ app.get("/api/db/:collection/:id", async (req, res) => {
     const tables = ['users', 'jobs', 'messages', 'notifications', 'tickets', 'quotations', 'invoices'];
     let data;
     if (tables.includes(collection)) {
-      const result = await sql(`SELECT * FROM ${collection} WHERE id = $1`, [id]);
+      const result = await sql.query(`SELECT * FROM ${collection} WHERE id = $1`, [id]);
       data = result[0];
     } else {
       const result = await sql`SELECT data FROM documents WHERE id = ${id} AND collection = ${collection}`;
@@ -491,7 +491,7 @@ app.post("/api/db/:collection", async (req, res) => {
       const values = Object.values(tableData);
       const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
       const query = `INSERT INTO ${collection} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`;
-      const result = await sql(query, values);
+      const result = await sql.query(query, values);
       resultData = result[0];
     } else {
       const result = await sql`
@@ -522,16 +522,16 @@ app.post("/api/db/:collection/:id", async (req, res) => {
       const values = Object.values(tableData);
       
       // Check if exists
-      const [existing] = await sql(`SELECT id FROM ${collection} WHERE id = $1`, [id]);
+      const [existing] = await sql.query(`SELECT id FROM ${collection} WHERE id = $1`, [id]);
       
       if (existing) {
         // Update
         const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
-        await sql(`UPDATE ${collection} SET ${setClause} WHERE id = $${keys.length + 1}`, [...values, id]);
+        await sql.query(`UPDATE ${collection} SET ${setClause} WHERE id = $${keys.length + 1}`, [...values, id]);
       } else {
         // Insert with specified ID
         const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-        await sql(`INSERT INTO ${collection} (id, ${keys.join(', ')}) VALUES ($${keys.length + 1}, ${placeholders})`, [...values, id]);
+        await sql.query(`INSERT INTO ${collection} (id, ${keys.join(', ')}) VALUES ($${keys.length + 1}, ${placeholders})`, [...values, id]);
       }
     } else {
       // Generic documents table upsert
@@ -561,7 +561,7 @@ app.put("/api/db/:collection/:id", async (req, res) => {
       const values = Object.values(tableData);
       const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
       const query = `UPDATE ${collection} SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *`;
-      await sql(query, [...values, id]);
+      await sql.query(query, [...values, id]);
     } else {
       await sql`
         UPDATE documents 
@@ -583,7 +583,7 @@ app.delete("/api/db/:collection/:id", async (req, res) => {
   try {
     const tables = ['users', 'jobs', 'messages', 'notifications', 'tickets', 'quotations', 'invoices', 'job_postings', 'opportunities', 'applications'];
     if (tables.includes(collection)) {
-      await sql(`DELETE FROM ${collection} WHERE id = $1`, [id]);
+      await sql.query(`DELETE FROM ${collection} WHERE id = $1`, [id]);
     } else {
       await sql`DELETE FROM documents WHERE id = ${id} AND collection = ${collection}`;
     }
